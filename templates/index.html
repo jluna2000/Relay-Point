@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat+Alternates:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/index.css">
+    <title>Document</title>
+</head>
+<body>
+    <nav>
+        <a href="{{ url_for('upload') }}">Upload</a>
+        <a href="#about">About</a>
+    </nav>
+    <div class="gallery">
+        {% for filename in filenames %}
+            <a href="{{ url_for('load_media', filename='.'.join(filename.split('_thumbnail')[0].rsplit('_', 1))) }}" class="thumbnail-container" target="_blank">
+                <img src="{{ url_for('get_thumbnail', filename=filename) }}" class="images" loading="lazy" />
+                {% if '_mp4_' in filename or '_mov_' in filename.lower() %}
+                    <div class="play-overlay"></div>
+                {% endif %}
+            </a>
+        {% endfor %}
+    </div>
+</body>
+</html>

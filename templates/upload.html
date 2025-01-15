@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat+Alternates:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/upload.css">
+    <title>Document</title>
+</head>
+<body>
+    <form action = "#" method = "POST" enctype = "multipart/form-data">
+        <label for = "fileUpload" style="font-size: 40px;">Upload a file</label>
+        <div id="uploadDiv">
+            <input type = "file" id = "uploadingFile" name = "fileUpload" accept=".png, .jpg, .jpeg, .mp4, .HEIC, .mov, .gif" multiple/>
+            <div class="button-container">
+                <button id="testButton" type = "submit" value = "submit" disabled>
+                    Upload
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+                    <path d="M17.504 26.025l.001-14.287 6.366 6.367L26 15.979 15.997 5.975 6 15.971 8.129 18.1l6.366-6.368v14.291z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </form>
+    <br>
+    <a href="{{ url_for('home') }}"><button id = "elsewhere">Go to drive</button></a>
+</body>
+<!-- bleh -->
+<style>
+    .loader-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      pointer-events: none;
+      visibility: hidden;
+    }
+  
+    .loader {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      background-image: url('https://icons8.com/preloaders/preloaders/22/Fading%20circles.gif'); /* Replace with your loading wheel GIF */
+      background-size: cover;
+    }
+  </style>
+  
+  <div class="loader-overlay" id="loaderOverlay">
+    <div class="loader"></div>
+  </div>
+  
+  <script>
+    const button = document.getElementById('testButton');
+    const loaderOverlay = document.getElementById('loaderOverlay');
+
+    document.getElementById("uploadingFile").addEventListener("change", function () {
+        button.disabled = !this.files.length; // Enable if a file is selected, disable if not
+    });
+
+  
+    button.addEventListener('click', function() {
+      // Show loading spinner
+      loaderOverlay.style.visibility = 'visible';
+  
+      // Simulate async task
+    //   setTimeout(function() {
+    //     // Hide loading spinner
+    //     loaderOverlay.style.visibility = 'hidden';
+    //   }, 2000); // Replace with your async task or API call
+    });
+  </script>
+</html>

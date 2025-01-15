@@ -1,0 +1,87 @@
+html{
+    font-family: 'Montserrat Alternates', sans-serif;
+}
+body{
+    font-weight: bold;
+    text-align: center;
+}
+button{
+    background-color: #333;
+    border: none;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    height: 65px;
+    width: 115px;
+    border-radius: 20px;
+    font-family: 'Montserrat Alternates', sans-serif;
+}
+
+#testButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* background-color: transparent;
+    border: 0.0625rem solid #bb86fc;
+    color: #bb86fc;
+    text-align: center;
+    text-decoration: none;
+    height: 65px;
+    width: 115px;
+    border-radius: 20px; */
+    /* display: inline-block; */
+}
+
+    #testButton svg {
+        width: 16px;
+        height: 16px;
+        margin-left: 8px;
+        fill: #bb86fc;
+    }
+    button:hover{
+        cursor: pointer;
+        background-color: #bb86fc;
+        border: 0.0625rem solid #bb86fc;
+        color: black;
+        transition:0.1s;
+    }
+    #testButton:hover svg {
+        fill: black; /* Color when hovered over */
+    }
+    #testButton:disabled {
+        background-color: grey;
+        color: white;
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+.button-container {
+    display: flex;
+    justify-content: center;
+}
+
+#uploadingFile::file-selector-button{
+    background-color: #333;
+    border: none;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    height: 65px;
+    width: 115px;
+    border-radius: 20px;
+    font-family: 'Montserrat Alternates', sans-serif;
+}
+#uploadingFile::file-selector-button:hover{
+    cursor: pointer;
+    background-color: #bb86fc;
+    border: 0.0625rem solid #bb86fc;
+    color: black;
+    transition:0.1s;
+}
+#uploadDiv{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 8rem;
+    padding-bottom: 1rem;
+}
