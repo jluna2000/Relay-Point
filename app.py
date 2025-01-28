@@ -14,6 +14,10 @@ def request_files(file):
     socketio.call('my_message', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
+def send_files_to_drive(file):
+    socketio.call('my_message', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
+    return {"status": "Request sent"}, 200
+
 @app.route("/", methods=["POST", "GET"])
 def home():
     filenames = []
@@ -36,8 +40,13 @@ def upload():
         generate_thumbnails(f"preprocessingimages/")
         for file in os.listdir("preprocessingimages/"):
             src = f"preprocessingimages/{file}"
-            dst = f"photos/{file}"
+            dst = f"photosToDrive/{file}"
             shutil.move(src, dst)
+        shutil.make_archive("photosToDrive.zip", 'zip', "photosToDrive")
+        send_files_to_drive("photosToDrive.zip")
+        if os.path.exists("photosToDrive"):
+            shutil.rmtree("photosToDrive")  # Delete the folder and its contents
+        os.makedirs("photosToDrive")
         return redirect(url_for("home"))
     else:
         return render_template("upload.html")
@@ -66,6 +75,10 @@ def imagestorageupload():
     if not os.path.exists(f"photos/{new_name}"):
         file.save(f"photos/{new_name}")
     return {"status": "Request received"}, 200
+
+@app.route("/download_from_imagestorage_client", methods=["GET"])
+def imagestoragedownload():
+    return send_from_directory('.', "photosToDrive.zip")
 
 @socketio.on('connect', namespace='/imagestorage')
 def handle_connect():
