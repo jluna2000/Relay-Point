@@ -4,24 +4,31 @@ import os
 from werkzeug.utils import secure_filename
 from makingthumbnails import convert_heic_to_jpg, generate_thumbnails
 from flask_socketio import SocketIO, send, emit
+import zipfile
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
 clients = []
 
-def request_files(file):
+def get_drive_files(file):
     socketio.call('my_message', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
-def send_files_to_drive(file):
+def post_drive_files(file):
     socketio.call('my_message', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
+    return {"status": "Request sent"}, 200
+
+def get_thumbnails():
+    socketio.call('get_thumbnails_from_drive', namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
 @app.route("/", methods=["POST", "GET"])
 def home():
     filenames = []
     try:
+        if not os.path.exists(f"thumbnails"):
+            get_thumbnails()
         for filename in os.listdir('thumbnails/'):
             filenames.append(filename)
         return render_template("index.html", filenames=filenames)
@@ -35,17 +42,12 @@ def upload():
         print(files, "Files uploaded")
         for f in files:
             new_name = secure_filename(f.filename)
-            if not os.path.exists(f"photos/{new_name}"):
-                f.save(f"preprocessingimages/{new_name}")
-        generate_thumbnails(f"preprocessingimages/")
-        for file in os.listdir("preprocessingimages/"):
-            src = f"preprocessingimages/{file}"
-            dst = f"photosToDrive/{file}"
-            shutil.move(src, dst)
-        shutil.make_archive("photosToDrive.zip", 'zip', "photosToDrive")
-        send_files_to_drive("photosToDrive.zip")
+            f.save(f"photosToDrive/{new_name}")
+        shutil.make_archive("photosToDrive", 'zip', "photosToDrive")
+        post_drive_files("photosToDrive.zip")
         if os.path.exists("photosToDrive"):
             shutil.rmtree("photosToDrive")  # Delete the folder and its contents
+            os.remove("photosToDrive.zip")
         os.makedirs("photosToDrive")
         return redirect(url_for("home"))
     else:
@@ -61,24 +63,43 @@ def load_media(filename):
 
 @app.route("/gettingimage/<path:filename>")
 def get_image(filename):
-    request_files(filename)
+    if not os.path.exists(f"photos/{filename}"):
+        get_drive_files(filename)
     if filename.endswith('.HEIC'):
         if not os.path.exists((f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg")):
             convert_heic_to_jpg(f"photos/{filename}", (f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg"))
         return send_from_directory('tempheic/', (f"{filename}".replace(".HEIC", "") + ".jpeg"))
     return send_from_directory('photos/', filename)
 
+# FUNCTIONS AND ENDPOINTS PERTAINING THE DRIVE CLIENT
+
 @app.route("/upload_from_imagestorage_client", methods=["POST"])
 def imagestorageupload():
     file = request.files['file']
     new_name = secure_filename(file.filename)
-    if not os.path.exists(f"photos/{new_name}"):
-        file.save(f"photos/{new_name}")
+    file.save(f"photos/{new_name}")
     return {"status": "Request received"}, 200
 
 @app.route("/download_from_imagestorage_client", methods=["GET"])
 def imagestoragedownload():
     return send_from_directory('.', "photosToDrive.zip")
+
+@app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
+def thumbnailstorageupload():
+    file = request.files['file']
+    new_name = secure_filename(file.filename)
+    with zipfile.ZipFile(new_name, 'r') as zip_ref:
+        zip_ref.extractall('thumbnails')
+    return {"status": "Request received"}, 200
+
+@app.route("/upload_new_thumbnails_from_imagestorage_client", methods=["POST"])
+def newlyaddedthumbnailstorageupload():
+    files = request.files.getlist('files')
+    for file in files:
+        new_name = secure_filename(file.filename)
+        if not os.path.exists(f"thumbnails/{new_name}"):
+            file.save(f"thumbnails/{new_name}")
+    return {"status": "Request received"}, 200
 
 @socketio.on('connect', namespace='/imagestorage')
 def handle_connect():
@@ -90,4 +111,4 @@ def handle_disconnect():
     print("Client disconnected")
 
 if __name__ == "__main__":
-    socketio.run(app, port=5000, debug=True)
+    socketio.run(app, debug=True)

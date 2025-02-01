@@ -8,10 +8,10 @@
 <body>
     {% if not filename.lower().endswith(('.mp4', '.mov')) %}
         <img style="height: 100vh; width: auto;" src="{{ url_for('get_image', filename=filename) }}" class="images" />
+    {% elif filename.lower().endswith('.mov') %}
+        <video src="{{ url_for('get_image', filename=filename) }}" type="video/quicktime" style="height: 100vh; width: auto;" controls></video>
     {% else %}
-        <video style="height: 100vh; width: auto;" controls>
-            <source src="{{ url_for('get_image', filename=filename) }}" type="video/mp4">
-        </video>
+        <video src="{{ url_for('get_image', filename=filename) }}" type="video/mp4" style="height: 100vh; width: auto;" controls></video>
     {% endif %}
 </body>
 </html>
