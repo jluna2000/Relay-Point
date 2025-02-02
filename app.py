@@ -88,6 +88,7 @@ def imagestoragedownload():
 def thumbnailstorageupload():
     file = request.files['file']
     new_name = secure_filename(file.filename)
+    file.save(f"{new_name}")
     with zipfile.ZipFile(new_name, 'r') as zip_ref:
         zip_ref.extractall('thumbnails')
     return {"status": "Request received"}, 200
