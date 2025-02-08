@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, url_for, redirect, send_file,
 import shutil
 import os
 from werkzeug.utils import secure_filename
-from makingthumbnails import convert_heic_to_jpg, generate_thumbnails
-from flask_socketio import SocketIO, send, emit
+from makingthumbnails import convert_heic_to_jpg
+from flask_socketio import SocketIO
 import zipfile
 
 app = Flask(__name__)
@@ -12,11 +12,11 @@ socketio = SocketIO(app)
 clients = []
 
 def get_drive_files(file):
-    socketio.call('my_message', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
+    socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
 def post_drive_files(file):
-    socketio.call('my_message', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
+    socketio.call('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
 def get_thumbnails():
@@ -38,7 +38,7 @@ def home():
 @app.route("/upload", methods=["POST", "GET"])
 def upload():
     if request.method == "POST":
-        files = request.files.getlist('fileUpload')
+        files = request.files.getlist('files')
         print(files, "Files uploaded")
         for f in files:
             new_name = secure_filename(f.filename)
@@ -66,6 +66,8 @@ def get_image(filename):
     if not os.path.exists(f"photos/{filename}"):
         get_drive_files(filename)
     if filename.endswith('.HEIC'):
+        if not os.path.exists((f"tempheic")):
+            os.mkdir("tempheic")
         if not os.path.exists((f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg")):
             convert_heic_to_jpg(f"photos/{filename}", (f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg"))
         return send_from_directory('tempheic/', (f"{filename}".replace(".HEIC", "") + ".jpeg"))
@@ -112,4 +114,4 @@ def handle_disconnect():
     print("Client disconnected")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, port=8081, host="0.0.0.0", debug=True)
