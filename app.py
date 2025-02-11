@@ -43,6 +43,7 @@ def upload():
         for f in files:
             new_name = secure_filename(f.filename)
             f.save(f"photosToDrive/{new_name}")
+            f.save(f"photos/{new_name}")
         shutil.make_archive("photosToDrive", 'zip', "photosToDrive")
         post_drive_files("photosToDrive.zip")
         if os.path.exists("photosToDrive"):
@@ -59,12 +60,12 @@ def get_thumbnail(filename):
 
 @app.route("/loadmedia/<path:filename>")
 def load_media(filename):
+    if not os.path.exists(f"photos/{filename}"):
+        get_drive_files(filename)
     return render_template("display.html", filename=filename)
 
 @app.route("/gettingimage/<path:filename>")
 def get_image(filename):
-    if not os.path.exists(f"photos/{filename}"):
-        get_drive_files(filename)
     if filename.endswith('.HEIC'):
         if not os.path.exists((f"tempheic")):
             os.mkdir("tempheic")
