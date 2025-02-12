@@ -1,12 +1,14 @@
-from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory
+from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory, session
 import shutil
 import os
 from werkzeug.utils import secure_filename
 from makingthumbnails import convert_heic_to_jpg
 from flask_socketio import SocketIO
 import zipfile
+import uuid
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY')
 socketio = SocketIO(app)
 
 clients = []
@@ -25,13 +27,16 @@ def get_thumbnails():
 
 @app.route("/", methods=["POST", "GET"])
 def home():
-    filenames = []
+    # filenames = []
+    if not session.get('session_id', None):
+        session_id = str(uuid.uuid4())
+        session['session_id'] = session_id
     try:
         if not os.path.exists(f"thumbnails"):
             get_thumbnails()
-        for filename in os.listdir('thumbnails/'):
-            filenames.append(filename)
-        return render_template("index.html", filenames=filenames)
+        # for filename in os.listdir('thumbnails/'):
+        #     filenames.append(filename)
+        return render_template("index.html", filenames=os.listdir('thumbnails/'))
     except FileNotFoundError:
         return "F Drive is not connected"
     
