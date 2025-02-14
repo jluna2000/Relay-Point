@@ -6,10 +6,16 @@ from makingthumbnails import convert_heic_to_jpg
 from flask_socketio import SocketIO
 import zipfile
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 socketio = SocketIO(app)
+os.mkdir('photos')
+os.mkdir('tempheic')
+os.mkdir('photosToDrive')
 
 clients = []
 
