@@ -13,6 +13,7 @@ MarkupSafe==3.0.2
 pillow==11.1.0
 pycparser==2.22
 pyheif==0.8.0
+python-dotenv==1.0.1
 python-engineio==4.11.2
 python-socketio==5.12.1
 simple-websocket==1.1.0
