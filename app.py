@@ -13,113 +13,152 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 socketio = SocketIO(app)
-os.mkdir('photos')
-os.mkdir('tempheic')
-os.mkdir('photosToDrive')
 
-clients = []
+clients = {}
 
-def get_drive_files(file):
-    socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
+def get_drive_files(file, md):
+    socketio.call('drive_files', {"action": "fetch", "file": file, "socket_index":md.socket_index}, namespace='/imagestorage', to=list(clients.keys())[0])
     return {"status": "Request sent"}, 200
 
-def post_drive_files(file):
-    socketio.call('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
+def post_drive_files(file, md):
+    socketio.call('drive_files', {"action":"download", "file":file, "socket_index":md.socket_index}, namespace='/imagestorage', to=list(clients.keys())[0])
     return {"status": "Request sent"}, 200
 
-def get_thumbnails():
-    socketio.call('get_thumbnails_from_drive', namespace='/imagestorage', to=clients[0])
+def get_thumbnails(md):
+    socketio.call('get_thumbnails_from_drive', {"socket_index":md.socket_index}, namespace='/imagestorage', to=list(clients.keys())[0])
     return {"status": "Request sent"}, 200
+
+class MyDirectiories:
+    def __init__(self, session_id, socket_index):
+        self.session_id = session_id
+        self.socket_index = socket_index
+        self.PHOTOS = f"photos_{session_id}"
+        self.TEMPHEIC = f"tempheic_{session_id}"
+        self.TODRIVE = f"photosToDrive_{session_id}"
+        self.THUMBNAILS = f"thumbnails_{session_id}"
+
+    def arg_dict(self):
+        return {"session_id": self.session_id, "socket_index":self.socket_index}
+
+def setUpSession():
+    session_id = str(uuid.uuid4())
+    session['session_id'] = session_id
+    session_clients_index = len(clients.get(list(clients.keys())[0]))
+    print(clients[list(clients.keys())[0]])
+    clients[list(clients.keys())[0]].append(session_id)
+    print(clients[list(clients.keys())[0]][session_clients_index])
+    md = MyDirectiories(session_id=session_id, socket_index=session_clients_index)
+    session['session_directories'] = md.arg_dict()
+    os.mkdir(md.PHOTOS)
+    os.mkdir(md.TEMPHEIC)
+    os.mkdir(md.TODRIVE)
 
 @app.route("/", methods=["POST", "GET"])
 def home():
-    # filenames = []
-    if not session.get('session_id', None):
-        session_id = str(uuid.uuid4())
-        session['session_id'] = session_id
+    if not session.get('session_id'):
+        setUpSession()
     try:
-        if not os.path.exists(f"thumbnails"):
-            get_thumbnails()
-        # for filename in os.listdir('thumbnails/'):
-        #     filenames.append(filename)
-        return render_template("index.html", filenames=os.listdir('thumbnails/'))
-    except FileNotFoundError:
-        return "F Drive is not connected"
+        print(session['session_directories'])
+        # https://www.geeksforgeeks.org/what-does-the-double-star-operator-mean-in-python/
+        # pertaining to function arguments
+        md = MyDirectiories(**session['session_directories'])
+        if not os.path.exists(md.THUMBNAILS):
+            get_thumbnails(md)
+        return render_template("index.html", filenames=os.listdir(md.THUMBNAILS))
+    except Exception as e:
+        return f"F Drive is not connected, {e}"
     
 @app.route("/upload", methods=["POST", "GET"])
 def upload():
+    print(session.get('session_id'))
+    md = MyDirectiories(**session['session_directories'])
     if request.method == "POST":
         files = request.files.getlist('files')
         print(files, "Files uploaded")
         for f in files:
             new_name = secure_filename(f.filename)
-            f.save(f"photosToDrive/{new_name}")
-            f.save(f"photos/{new_name}")
-        shutil.make_archive("photosToDrive", 'zip', "photosToDrive")
-        post_drive_files("photosToDrive.zip")
-        if os.path.exists("photosToDrive"):
-            shutil.rmtree("photosToDrive")  # Delete the folder and its contents
-            os.remove("photosToDrive.zip")
-        os.makedirs("photosToDrive")
+            f.save(f"{md.TODRIVE}/{new_name}")
+            shutil.copy(f"{md.TODRIVE}/{new_name}", f"{md.PHOTOS}/{new_name}")
+        shutil.make_archive(md.TODRIVE, 'zip', md.TODRIVE)
+        post_drive_files(f"{md.TODRIVE}.zip", md)
+        if os.path.exists(md.TODRIVE):
+            shutil.rmtree(md.TODRIVE)  # Delete the folder and its contents
+            os.remove(f"{md.TODRIVE}.zip")
+        os.makedirs(md.TODRIVE)
         return redirect(url_for("home"))
     else:
         return render_template("upload.html")
 
 @app.route("/gettingthumbnail/<path:filename>")
 def get_thumbnail(filename):
-    return send_from_directory('thumbnails/', filename)
+    md = MyDirectiories(**session['session_directories'])
+    return send_from_directory(md.THUMBNAILS, filename)
 
 @app.route("/loadmedia/<path:filename>")
 def load_media(filename):
-    if not os.path.exists(f"photos/{filename}"):
-        get_drive_files(filename)
+    md = MyDirectiories(**session['session_directories'])
+    if not os.path.exists(f"{md.PHOTOS}/{filename}"):
+        get_drive_files(filename, md)
     return render_template("display.html", filename=filename)
 
 @app.route("/gettingimage/<path:filename>")
 def get_image(filename):
+    md = MyDirectiories(**session['session_directories'])
     if filename.endswith('.HEIC'):
-        if not os.path.exists((f"tempheic")):
-            os.mkdir("tempheic")
-        if not os.path.exists((f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg")):
-            convert_heic_to_jpg(f"photos/{filename}", (f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg"))
-        return send_from_directory('tempheic/', (f"{filename}".replace(".HEIC", "") + ".jpeg"))
-    return send_from_directory('photos/', filename)
+        temp_heic_file_dir = f"{md.TEMPHEIC}/{filename}".replace(".HEIC", "") + ".jpeg"
+        if not os.path.exists(temp_heic_file_dir):
+            convert_heic_to_jpg(f"{md.PHOTOS}/{filename}", temp_heic_file_dir)
+        return send_from_directory(md.TEMPHEIC, (f"{filename}".replace(".HEIC", "") + ".jpeg"))
+    return send_from_directory(f'{md.PHOTOS}/', filename)
 
 # FUNCTIONS AND ENDPOINTS PERTAINING THE DRIVE CLIENT
 
 @app.route("/upload_from_imagestorage_client", methods=["POST"])
 def imagestorageupload():
     file = request.files['file']
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
     new_name = secure_filename(file.filename)
-    file.save(f"photos/{new_name}")
+    file.save(f"{md.PHOTOS}/{new_name}")
     return {"status": "Request received"}, 200
 
 @app.route("/download_from_imagestorage_client", methods=["GET"])
 def imagestoragedownload():
-    return send_from_directory('.', "photosToDrive.zip")
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
+    return send_from_directory('.', f"{md.TODRIVE}.zip")
 
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
 def thumbnailstorageupload():
+    data = request.form.get('socket_index')
     file = request.files['file']
-    new_name = secure_filename(file.filename)
+    print(clients.get(list(clients.keys())[0]))
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
+    new_name = f"{md.THUMBNAILS}.zip"
     file.save(f"{new_name}")
     with zipfile.ZipFile(new_name, 'r') as zip_ref:
-        zip_ref.extractall('thumbnails')
+        zip_ref.extractall(md.THUMBNAILS)
     return {"status": "Request received"}, 200
 
 @app.route("/upload_new_thumbnails_from_imagestorage_client", methods=["POST"])
 def newlyaddedthumbnailstorageupload():
     files = request.files.getlist('files')
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
     for file in files:
         new_name = secure_filename(file.filename)
-        if not os.path.exists(f"thumbnails/{new_name}"):
-            file.save(f"thumbnails/{new_name}")
+        if not os.path.exists(f"{md.THUMBNAILS}/{new_name}"):
+            file.save(f"{md.THUMBNAILS}/{new_name}")
     return {"status": "Request received"}, 200
 
 @socketio.on('connect', namespace='/imagestorage')
 def handle_connect():
     print("Client connected: ", request.sid)
-    clients.append(request.sid)
+    clients[request.sid] = []
 
 @socketio.on('disconnect', namespace='/imagestorage')
 def handle_disconnect():
