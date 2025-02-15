@@ -13,9 +13,10 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 socketio = SocketIO(app)
-os.mkdir('photos')
-os.mkdir('tempheic')
-os.mkdir('photosToDrive')
+if not os.path.exists('photos'):
+    os.mkdir('photos')
+    os.mkdir('tempheic')
+    os.mkdir('photosToDrive')
 
 clients = []
 
@@ -123,3 +124,5 @@ if __name__ == "__main__":
     socketio.run(app, port=8081, host="0.0.0.0", debug=True)
 
 # TODO: Change timeout for the socket call
+# SCRATCH ABOVE TODO, NEW ONE IS CHANGE CALL TO EMIT, AND HANDLE WHEN FILE IS READY
+# TODO: HANDLE EXCEPTIONS CAUSED BY PILLOW IN FILESERVER
