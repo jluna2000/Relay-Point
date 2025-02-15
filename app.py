@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory, session
+from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory
 import shutil
 import os
 from werkzeug.utils import secure_filename
@@ -33,15 +33,9 @@ def get_thumbnails():
 
 @app.route("/", methods=["POST", "GET"])
 def home():
-    # filenames = []
-    if not session.get('session_id', None):
-        session_id = str(uuid.uuid4())
-        session['session_id'] = session_id
     try:
         if not os.path.exists(f"thumbnails"):
             get_thumbnails()
-        # for filename in os.listdir('thumbnails/'):
-        #     filenames.append(filename)
         return render_template("index.html", filenames=os.listdir('thumbnails/'))
     except FileNotFoundError:
         return "F Drive is not connected"
