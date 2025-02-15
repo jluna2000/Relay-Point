@@ -46,22 +46,17 @@ def setUpSession():
     session_clients_index = len(clients.get(list(clients.keys())[0]))
     print(clients[list(clients.keys())[0]])
     clients[list(clients.keys())[0]].append(session_id)
+    print(clients[list(clients.keys())[0]][session_clients_index])
     md = MyDirectiories(session_id=session_id, socket_index=session_clients_index)
     session['session_directories'] = md.arg_dict()
     os.mkdir(md.PHOTOS)
     os.mkdir(md.TEMPHEIC)
     os.mkdir(md.TODRIVE)
 
-@app.route("/testing")
-def testingRoute():
-    return f"{clients.get(list(clients.keys())[0])}"
-
 @app.route("/", methods=["POST", "GET"])
 def home():
-    # filenames = []
     if not session.get('session_id'):
         setUpSession()
-    return redirect(url_for('testingRoute'))
     try:
         print(session['session_directories'])
         # https://www.geeksforgeeks.org/what-does-the-double-star-operator-mean-in-python/
@@ -69,8 +64,6 @@ def home():
         md = MyDirectiories(**session['session_directories'])
         if not os.path.exists(md.THUMBNAILS):
             get_thumbnails(md)
-        # for filename in os.listdir('thumbnails/'):
-        #     filenames.append(filename)
         return render_template("index.html", filenames=os.listdir(md.THUMBNAILS))
     except Exception as e:
         return f"F Drive is not connected, {e}"
@@ -85,9 +78,9 @@ def upload():
         for f in files:
             new_name = secure_filename(f.filename)
             f.save(f"{md.TODRIVE}/{new_name}")
-            f.save(f"{md.PHOTOS}/{new_name}")
+            shutil.copy(f"{md.TODRIVE}/{new_name}", f"{md.PHOTOS}/{new_name}")
         shutil.make_archive(md.TODRIVE, 'zip', md.TODRIVE)
-        post_drive_files(f"{md.TODRIVE}.zip")
+        post_drive_files(f"{md.TODRIVE}.zip", md)
         if os.path.exists(md.TODRIVE):
             shutil.rmtree(md.TODRIVE)  # Delete the folder and its contents
             os.remove(f"{md.TODRIVE}.zip")
@@ -105,7 +98,7 @@ def get_thumbnail(filename):
 def load_media(filename):
     md = MyDirectiories(**session['session_directories'])
     if not os.path.exists(f"{md.PHOTOS}/{filename}"):
-        get_drive_files(filename)
+        get_drive_files(filename, md)
     return render_template("display.html", filename=filename)
 
 @app.route("/gettingimage/<path:filename>")
@@ -119,19 +112,22 @@ def get_image(filename):
     return send_from_directory(f'{md.PHOTOS}/', filename)
 
 # FUNCTIONS AND ENDPOINTS PERTAINING THE DRIVE CLIENT
-# THESE WILL NOT WORK WITH CURRENT SESSION IMPLEMENTATION SINCE IT IS A DIFFERENT CLIENT THEREFORE DIFFERENT SESSION
 
 @app.route("/upload_from_imagestorage_client", methods=["POST"])
 def imagestorageupload():
-    md = MyDirectiories(**session['session_directories'])
     file = request.files['file']
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
     new_name = secure_filename(file.filename)
     file.save(f"{md.PHOTOS}/{new_name}")
     return {"status": "Request received"}, 200
 
 @app.route("/download_from_imagestorage_client", methods=["GET"])
 def imagestoragedownload():
-    md = MyDirectiories(**session['session_directories'])
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
     return send_from_directory('.', f"{md.TODRIVE}.zip")
 
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
@@ -149,8 +145,10 @@ def thumbnailstorageupload():
 
 @app.route("/upload_new_thumbnails_from_imagestorage_client", methods=["POST"])
 def newlyaddedthumbnailstorageupload():
-    md = MyDirectiories(**session['session_directories'])
     files = request.files.getlist('files')
+    data = request.form.get('socket_index')
+    session_id = clients.get(list(clients.keys())[0])[int(data)]
+    md = MyDirectiories(session_id=session_id, socket_index=None)
     for file in files:
         new_name = secure_filename(file.filename)
         if not os.path.exists(f"{md.THUMBNAILS}/{new_name}"):
