@@ -7,6 +7,7 @@ from flask_socketio import SocketIO
 import zipfile
 import uuid
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -17,15 +18,24 @@ if not os.path.exists('photos'):
     os.mkdir('photos')
     os.mkdir('tempheic')
     os.mkdir('photosToDrive')
+    os.mkdir('photosToDriveArcs')
 
 clients = []
+currently_uploading = {}
+
+def popZip(zip_file):
+    if zip_file:
+        if currently_uploading.get(zip_file):
+            currently_uploading.pop(zip_file)
+        if os.path.exists(f'photosToDriveArcs/{zip_file}'):
+            os.remove(f'photosToDriveArcs/{zip_file}')
 
 def get_drive_files(file):
     socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
     return {"status": "Request sent"}, 200
 
 def post_drive_files(file):
-    socketio.call('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', to=clients[0])
+    socketio.emit('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', callback=popZip, to=clients[0])
     return {"status": "Request sent"}, 200
 
 def get_thumbnails():
@@ -49,12 +59,15 @@ def upload():
         for f in files:
             new_name = secure_filename(f.filename)
             f.save(f"photosToDrive/{new_name}")
-            f.save(f"photos/{new_name}")
-        shutil.make_archive("photosToDrive", 'zip', "photosToDrive")
-        post_drive_files("photosToDrive.zip")
+            shutil.copy(f"photosToDrive/{new_name}", f"photos/{new_name}")
+        new_archive = secure_filename(f"arc_{datetime.now()}.zip")
+        new_arc_nozip = new_archive.replace('.zip', '')
+        shutil.make_archive(new_arc_nozip, 'zip', "photosToDrive")
+        shutil.move(new_archive, f"photosToDriveArcs/{new_archive}")
+        currently_uploading[new_archive] = os.listdir('photosToDrive')
+        post_drive_files(new_archive)
         if os.path.exists("photosToDrive"):
             shutil.rmtree("photosToDrive")  # Delete the folder and its contents
-            os.remove("photosToDrive.zip")
         os.makedirs("photosToDrive")
         return redirect(url_for("home"))
     else:
@@ -89,9 +102,9 @@ def imagestorageupload():
     file.save(f"photos/{new_name}")
     return {"status": "Request received"}, 200
 
-@app.route("/download_from_imagestorage_client", methods=["GET"])
-def imagestoragedownload():
-    return send_from_directory('.', "photosToDrive.zip")
+@app.route("/download_from_imagestorage_client/<filename>", methods=["GET"])
+def imagestoragedownload(filename):
+    return send_from_directory('photosToDriveArcs', filename)
 
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
 def thumbnailstorageupload():
@@ -123,6 +136,4 @@ def handle_disconnect():
 if __name__ == "__main__":
     socketio.run(app, port=8081, host="0.0.0.0", debug=True)
 
-# TODO: Change timeout for the socket call
-# SCRATCH ABOVE TODO, NEW ONE IS CHANGE CALL TO EMIT, AND HANDLE WHEN FILE IS READY
 # TODO: HANDLE EXCEPTIONS CAUSED BY PILLOW IN FILESERVER
