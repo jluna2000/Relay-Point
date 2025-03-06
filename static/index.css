@@ -65,3 +65,17 @@ nav a:hover {
     background-color: #bb86fc;
     color: black;
 }
+
+#signInButton{
+    cursor: pointer;
+    border: #333;
+    border-radius: 5px;
+    background-color: #333;
+    color: white;
+    padding: 14px 16px;
+    text-align: center;
+}
+#signInButton:hover {
+    background-color: #bb86fc;
+    color: black;
+}

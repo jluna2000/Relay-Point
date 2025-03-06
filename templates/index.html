@@ -14,15 +14,26 @@
         <a href="{{ url_for('upload') }}">Upload</a>
         <a href="#about">About</a>
     </nav>
-    <div class="gallery">
-        {% for filename in filenames %}
-            <a href="{{ url_for('load_media', filename='.'.join(filename.split('_thumbnail')[0].rsplit('_', 1))) }}" class="thumbnail-container" target="_blank">
-                <img src="{{ url_for('get_thumbnail', filename=filename) }}" class="images" loading="lazy" />
-                {% if '_mp4_' in filename or '_mov_' in filename.lower() %}
-                    <div class="play-overlay"></div>
-                {% endif %}
+    {% if authenticated %}
+        <div class="gallery">
+            {% for filename in filenames %}
+                <a href="{{ url_for('load_media', filename='.'.join(filename.split('_thumbnail')[0].rsplit('_', 1))) }}" class="thumbnail-container" target="_blank">
+                    <img src="{{ url_for('get_thumbnail', filename=filename) }}" class="images" loading="lazy" />
+                    {% if '_mp4_' in filename or '_mov_' in filename.lower() %}
+                        <div class="play-overlay"></div>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div>
+            <p>You are not logged in!</p>
+            <a href="{{ url_for('google.login') }}">
+                <div id="signInButton">
+                    Sign In
+                </div>
             </a>
-        {% endfor %}
-    </div>
+        </div>
+    {% endif %}
 </body>
 </html>
