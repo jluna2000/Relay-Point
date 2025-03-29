@@ -24,12 +24,19 @@ socketio = SocketIO(app)
 login_manager = LoginManager(app)
 # login_manager.login_view = "google.login"
 
+class Photoserver(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, unique=True)
+    socket_client = db.Column(db.String, unique=True)
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     google_id = db.Column(db.String(256), unique=True)
     name = db.Column(db.String(256))
     email = db.Column(db.String(256), unique=True)
-    photoserver = db.Column(db.String, unique=True)
+    photoserver_id = db.Column(db.Integer, db.ForeignKey(Photoserver.id))
+
+    photoserver = db.relationship('Photoserver')
 
 class OAuth(OAuthConsumerMixin, db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey(User.id))
@@ -57,7 +64,6 @@ if not os.path.exists('photos'):
     os.mkdir('photosToDrive')
     os.mkdir('photosToDriveArcs')
 
-clients = []
 currently_uploading = {}
 
 def popZip(zip_file):
@@ -68,15 +74,15 @@ def popZip(zip_file):
             os.remove(f'photosToDriveArcs/{zip_file}')
 
 def get_drive_files(file):
-    socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=clients[0])
+    socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=sock_clients)
     return {"status": "Request sent"}, 200
 
 def post_drive_files(file):
-    socketio.emit('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', callback=popZip, to=clients[0])
+    socketio.emit('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', callback=popZip, to=sock_clients)
     return {"status": "Request sent"}, 200
 
 def get_thumbnails():
-    socketio.call('get_thumbnails_from_drive', namespace='/imagestorage', to=clients[0])
+    socketio.call('get_thumbnails_from_drive', namespace='/imagestorage', to=sock_clients)
     return {"status": "Request sent"}, 200
 
 @app.route("/", methods=["POST", "GET"])
@@ -90,8 +96,10 @@ def home():
         if not os.path.exists(f"thumbnails"):
             get_thumbnails()
         return render_template("index.html", authenticated=True, filenames=os.listdir('thumbnails/'))
-    except FileNotFoundError:
-        return "F Drive is not connected"
+    except Exception as e:
+        if "name 'sock_clients' is not defined" in str(e):
+            return redirect(url_for('new_user'))
+        return f"F Drive is not connected: {e}"
 
 @app.route("/auth-authorized")
 def authorized():
@@ -109,14 +117,22 @@ def authorized():
     user = User.query.filter_by(google_id=google_id).first()
     if not user:
         # Create a new user if not found.
-        user = User(google_id=google_id, name=name, email=email, photoserver=str(uuid.uuid4()))
+        user = User(google_id=google_id, name=name, email=email)
         db.session.add(user)
         db.session.commit()
+        login_user(user)
+        return redirect(url_for("new_user"))
 
     # Log the user in with Flask-Login.
     print("Flask-Login about to login")
     login_user(user)
     return redirect(url_for("home"))
+
+@app.route("/new-user")
+def new_user():
+    current_user.photoserver = Photoserver(name=str(uuid.uuid4()))
+    un_token = current_user.photoserver.name
+    return render_template("connectphotoserver.html", download_token=un_token)
 
 @app.route("/logout")
 @login_required
@@ -199,8 +215,10 @@ def newlyaddedthumbnailstorageupload():
 
 @socketio.on('connect', namespace='/imagestorage')
 def handle_connect():
+    global sock_clients
     print("Client connected: ", request.sid)
-    clients.append(request.sid)
+    sock_clients = request.sid
+    current_user.photoserver.socket_client = request.id # have to handle how to only execute this from photo client
 
 @socketio.on('disconnect', namespace='/imagestorage')
 def handle_disconnect():
