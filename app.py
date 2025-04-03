@@ -7,7 +7,7 @@ import shutil
 import os
 from werkzeug.utils import secure_filename
 from makingthumbnails import convert_heic_to_jpg
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, join_room, leave_room
 import zipfile
 import uuid
 from dotenv import load_dotenv
@@ -65,6 +65,7 @@ if not os.path.exists('photos'):
     os.mkdir('photosToDriveArcs')
 
 currently_uploading = {}
+photo_namespace = ""
 
 def popZip(zip_file):
     if zip_file:
@@ -74,15 +75,17 @@ def popZip(zip_file):
             os.remove(f'photosToDriveArcs/{zip_file}')
 
 def get_drive_files(file):
-    socketio.call('drive_files', {"action": "fetch", "file": file}, namespace='/imagestorage', to=sock_clients)
+    if not current_user.is_authenticated:
+        return
+    socketio.call('drive_files', {"action": "fetch", "file": file}, to=current_user.photoserver.socket_client)
     return {"status": "Request sent"}, 200
 
 def post_drive_files(file):
-    socketio.emit('drive_files', {"action":"download", "file":file}, namespace='/imagestorage', callback=popZip, to=sock_clients)
+    socketio.emit('drive_files', {"action":"download", "file":file}, callback=popZip, to=current_user.photoserver.socket_client)
     return {"status": "Request sent"}, 200
 
 def get_thumbnails():
-    socketio.call('get_thumbnails_from_drive', namespace='/imagestorage', to=sock_clients)
+    socketio.call('get_thumbnails_from_drive', to=current_user.photoserver.socket_client)
     return {"status": "Request sent"}, 200
 
 @app.route("/", methods=["POST", "GET"])
@@ -93,9 +96,9 @@ def home():
         # return redirect(url_for("google.login"))
     print("Authenticated")
     try:
-        if not os.path.exists(f"thumbnails"):
+        if not os.path.exists(f"{current_user.photoserver.name}/thumbnails"):
             get_thumbnails()
-        return render_template("index.html", authenticated=True, filenames=os.listdir('thumbnails/'))
+        return render_template("index.html", authenticated=True, filenames=os.listdir(f"{current_user.photoserver.name}/thumbnails"))
     except Exception as e:
         if "name 'sock_clients' is not defined" in str(e):
             return redirect(url_for('new_user'))
@@ -103,6 +106,7 @@ def home():
 
 @app.route("/auth-authorized")
 def authorized():
+    global photo_namespace
     print("Authorizing")
     resp = google.get("/oauth2/v2/userinfo")
     if not resp.ok:
@@ -125,6 +129,7 @@ def authorized():
 
     # Log the user in with Flask-Login.
     print("Flask-Login about to login")
+    photo_namespace = current_user.photoserver.name
     login_user(user)
     return redirect(url_for("home"))
 
@@ -132,12 +137,15 @@ def authorized():
 def new_user():
     current_user.photoserver = Photoserver(name=str(uuid.uuid4()))
     un_token = current_user.photoserver.name
+    db.session.commit()
     return render_template("connectphotoserver.html", download_token=un_token)
 
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
+    global photo_namespace
+    photo_namespace = ""
     return redirect(url_for("home"))
     
 @app.route("/upload", methods=["POST", "GET"])
@@ -164,7 +172,7 @@ def upload():
 
 @app.route("/gettingthumbnail/<path:filename>")
 def get_thumbnail(filename):
-    return send_from_directory('thumbnails/', filename)
+    return send_from_directory(f"{current_user.photoserver.name}/thumbnails", filename)
 
 @app.route("/loadmedia/<path:filename>")
 def load_media(filename):
@@ -198,10 +206,11 @@ def imagestoragedownload(filename):
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
 def thumbnailstorageupload():
     file = request.files['file']
+    room_data = request.form['room']
     new_name = secure_filename(file.filename)
     file.save(f"{new_name}")
     with zipfile.ZipFile(new_name, 'r') as zip_ref:
-        zip_ref.extractall('thumbnails')
+        zip_ref.extractall(f'{room_data}/thumbnails')
     return {"status": "Request received"}, 200
 
 @app.route("/upload_new_thumbnails_from_imagestorage_client", methods=["POST"])
@@ -213,14 +222,31 @@ def newlyaddedthumbnailstorageupload():
             file.save(f"thumbnails/{new_name}")
     return {"status": "Request received"}, 200
 
-@socketio.on('connect', namespace='/imagestorage')
+@socketio.on('connect')
 def handle_connect():
-    global sock_clients
     print("Client connected: ", request.sid)
-    sock_clients = request.sid
-    current_user.photoserver.socket_client = request.id # have to handle how to only execute this from photo client
 
-@socketio.on('disconnect', namespace='/imagestorage')
+@socketio.on('newuserconnect')
+def new_user_connect():
+    print("New user page connected")
+
+@socketio.on('join')
+def on_join(join_data):
+    room = join_data["room"]
+    pclient = join_data.get("pclient")
+    if pclient:
+        photo_name = Photoserver.query.filter_by(name=room).first()
+        print(f"Photo name is {photo_name}, room is {room}")
+        if photo_name:
+            photo_name.socket_client = request.sid
+            socketio.emit('gotohome', to=room)
+            db.session.commit()
+    username = request.sid
+    join_room(room)
+    print(username + ' has entered room ' + room)
+
+
+@socketio.on('disconnect')
 def handle_disconnect():
     print("Client disconnected")
 
