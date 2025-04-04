@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory
+from flask import Flask, render_template, request, url_for, redirect, send_file, jsonify, send_from_directory, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_dance.consumer.storage.sqla import OAuthConsumerMixin, SQLAlchemyStorage
 from flask_dance.contrib.google import make_google_blueprint, google
@@ -58,21 +58,14 @@ google_bp.storage = SQLAlchemyStorage(OAuth, db.session, user=current_user, user
 
 app.register_blueprint(google_bp, url_prefix="/login")
 
-if not os.path.exists('photos'):
-    os.mkdir('photos')
-    os.mkdir('tempheic')
-    os.mkdir('photosToDrive')
-    os.mkdir('photosToDriveArcs')
-
 currently_uploading = {}
-photo_namespace = ""
 
 def popZip(zip_file):
     if zip_file:
         if currently_uploading.get(zip_file):
             currently_uploading.pop(zip_file)
-        if os.path.exists(f'photosToDriveArcs/{zip_file}'):
-            os.remove(f'photosToDriveArcs/{zip_file}')
+        if os.path.exists(f'{session['my_dirs']['photosToDriveArcs']}/{zip_file}'):
+            os.remove(f'{session['my_dirs']['photosToDriveArcs']}/{zip_file}')
 
 def get_drive_files(file):
     if not current_user.is_authenticated:
@@ -95,10 +88,23 @@ def home():
         return render_template("index.html", authenticated=False)
         # return redirect(url_for("google.login"))
     print("Authenticated")
+    if not os.path.exists(f'sfolder_{current_user.photoserver.name}'):
+        os.mkdir(f'sfolder_{current_user.photoserver.name}')
+        os.mkdir(f'sfolder_{current_user.photoserver.name}/photos')
+        os.mkdir(f'sfolder_{current_user.photoserver.name}/tempheic')
+        os.mkdir(f'sfolder_{current_user.photoserver.name}/photosToDrive')
+        os.mkdir(f'sfolder_{current_user.photoserver.name}/photosToDriveArcs')
+        session['my_dirs'] = {
+            'photos':f'sfolder_{current_user.photoserver.name}/photos',
+            'tempheic':f'sfolder_{current_user.photoserver.name}/tempheic',
+            'photosToDrive':f'sfolder_{current_user.photoserver.name}/photosToDrive',
+            'photosToDriveArcs':f'sfolder_{current_user.photoserver.name}/photosToDriveArcs',
+            'thumbnails':f"sfolder_{current_user.photoserver.name}/thumbnails"
+        }
     try:
-        if not os.path.exists(f"{current_user.photoserver.name}/thumbnails"):
+        if not os.path.exists(session['my_dirs']['thumbnails']):
             get_thumbnails()
-        return render_template("index.html", authenticated=True, filenames=os.listdir(f"{current_user.photoserver.name}/thumbnails"))
+        return render_template("index.html", authenticated=True, filenames=os.listdir(session['my_dirs']['thumbnails']))
     except Exception as e:
         if "name 'sock_clients' is not defined" in str(e):
             return redirect(url_for('new_user'))
@@ -106,7 +112,6 @@ def home():
 
 @app.route("/auth-authorized")
 def authorized():
-    global photo_namespace
     print("Authorizing")
     resp = google.get("/oauth2/v2/userinfo")
     if not resp.ok:
@@ -129,7 +134,6 @@ def authorized():
 
     # Log the user in with Flask-Login.
     print("Flask-Login about to login")
-    photo_namespace = current_user.photoserver.name
     login_user(user)
     return redirect(url_for("home"))
 
@@ -144,8 +148,6 @@ def new_user():
 @login_required
 def logout():
     logout_user()
-    global photo_namespace
-    photo_namespace = ""
     return redirect(url_for("home"))
     
 @app.route("/upload", methods=["POST", "GET"])
@@ -155,53 +157,52 @@ def upload():
         print(files, "Files uploaded")
         for f in files:
             new_name = secure_filename(f.filename)
-            f.save(f"photosToDrive/{new_name}")
-            shutil.copy(f"photosToDrive/{new_name}", f"photos/{new_name}")
+            f.save(f"{session['my_dirs']['photosToDrive']}/{new_name}")
+            shutil.copy(f"{session['my_dirs']['photosToDrive']}/{new_name}", f"{session['my_dirs']['photos']}/{new_name}")
         new_archive = secure_filename(f"arc_{datetime.now()}.zip")
         new_arc_nozip = new_archive.replace('.zip', '')
-        shutil.make_archive(new_arc_nozip, 'zip', "photosToDrive")
-        shutil.move(new_archive, f"photosToDriveArcs/{new_archive}")
-        currently_uploading[new_archive] = os.listdir('photosToDrive')
+        shutil.make_archive(new_arc_nozip, 'zip', f"{session['my_dirs']['photosToDrive']}")
+        shutil.move(new_archive, f"{session['my_dirs']['photosToDriveArcs']}/{new_archive}")
+        currently_uploading[new_archive] = os.listdir(f'{session['my_dirs']['photosToDrive']}')
         post_drive_files(new_archive)
-        if os.path.exists("photosToDrive"):
-            shutil.rmtree("photosToDrive")  # Delete the folder and its contents
-        os.makedirs("photosToDrive")
+        if os.path.exists(f"{session['my_dirs']['photosToDrive']}"):
+            shutil.rmtree(f"{session['my_dirs']['photosToDrive']}")  # Delete the folder and its contents
+        os.makedirs(f"{session['my_dirs']['photosToDrive']}")
         return redirect(url_for("home"))
     else:
         return render_template("upload.html")
 
 @app.route("/gettingthumbnail/<path:filename>")
 def get_thumbnail(filename):
-    return send_from_directory(f"{current_user.photoserver.name}/thumbnails", filename)
+    return send_from_directory(f"{session['my_dirs']['thumbnails']}", filename)
 
 @app.route("/loadmedia/<path:filename>")
 def load_media(filename):
-    if not os.path.exists(f"photos/{filename}"):
+    if not os.path.exists(f"{session['my_dirs']['photos']}/{filename}"):
         get_drive_files(filename)
     return render_template("display.html", filename=filename)
 
 @app.route("/gettingimage/<path:filename>")
 def get_image(filename):
     if filename.endswith('.HEIC'):
-        if not os.path.exists((f"tempheic")):
-            os.mkdir("tempheic")
-        if not os.path.exists((f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg")):
-            convert_heic_to_jpg(f"photos/{filename}", (f"tempheic/{filename}".replace(".HEIC", "") + ".jpeg"))
-        return send_from_directory('tempheic/', (f"{filename}".replace(".HEIC", "") + ".jpeg"))
-    return send_from_directory('photos/', filename)
+        if not os.path.exists((f"{session['my_dirs']['tempheic']}/{filename}".replace(".HEIC", "") + ".jpeg")):
+            convert_heic_to_jpg(f"{session['my_dirs']['photos']}/{filename}", (f"{session['my_dirs']['tempheic']}/{filename}".replace(".HEIC", "") + ".jpeg"))
+        return send_from_directory(f'{session['my_dirs']['tempheic']}/', (f"{filename}".replace(".HEIC", "") + ".jpeg"))
+    return send_from_directory(f'{session['my_dirs']['photos']}/', filename)
 
 # FUNCTIONS AND ENDPOINTS PERTAINING THE DRIVE CLIENT
 
 @app.route("/upload_from_imagestorage_client", methods=["POST"])
 def imagestorageupload():
     file = request.files['file']
+    room_data = request.form['room']
     new_name = secure_filename(file.filename)
-    file.save(f"photos/{new_name}")
+    file.save(f"sfolder_{room_data}/photos/{new_name}")
     return {"status": "Request received"}, 200
 
 @app.route("/download_from_imagestorage_client/<filename>", methods=["GET"])
 def imagestoragedownload(filename):
-    return send_from_directory('photosToDriveArcs', filename)
+    return send_from_directory(f'{session['my_dirs']['photosToDriveArcs']}', filename)
 
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
 def thumbnailstorageupload():
@@ -210,16 +211,17 @@ def thumbnailstorageupload():
     new_name = secure_filename(file.filename)
     file.save(f"{new_name}")
     with zipfile.ZipFile(new_name, 'r') as zip_ref:
-        zip_ref.extractall(f'{room_data}/thumbnails')
+        zip_ref.extractall(f'sfolder_{room_data}/thumbnails')
     return {"status": "Request received"}, 200
 
 @app.route("/upload_new_thumbnails_from_imagestorage_client", methods=["POST"])
 def newlyaddedthumbnailstorageupload():
     files = request.files.getlist('files')
+    room_data = request.form['room']
     for file in files:
         new_name = secure_filename(file.filename)
-        if not os.path.exists(f"thumbnails/{new_name}"):
-            file.save(f"thumbnails/{new_name}")
+        if not os.path.exists(f"sfolder_{room_data}/thumbnails/{new_name}"):
+            file.save(f"sfolder_{room_data}/thumbnails/{new_name}")
     return {"status": "Request received"}, 200
 
 @socketio.on('connect')
