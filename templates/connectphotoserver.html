@@ -3,10 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat+Alternates:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/connectps.css">
     <title>Document</title>
 </head>
 <body>
-    {{ download_token }}
+    <div>
+        No drive connected
+    </div>
+    <button onclick="popup_click()">Connect drive</button>
+    <div id="dialg" class="container popup">
+        <div class="label">
+            E-mail address
+        </div>
+        <div class="copy-text">
+            <input type="text" class="text" value="{{ download_token }}" readonly/>
+            <button><i class="fa fa-clone"></i></button>
+        </div>
+    </div>
 </body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
 <script type="text/javascript" charset="utf-8">
@@ -16,6 +32,21 @@
     });
     socket.on('gotohome', function(){
         window.location.replace("/");
+    });
+    function popup_click(){
+        document.getElementById("dialg").classList.add("visi");
+        document.body.style.backgroundColor = "#33333384";
+    }
+    let copyText = document.querySelector(".copy-text");
+    copyText.querySelector("button").addEventListener("click", function () {
+        let input = copyText.querySelector("input.text");
+        input.select();
+        document.execCommand("copy");
+        copyText.classList.add("active");
+        window.getSelection().removeAllRanges();
+        setTimeout(function () {
+            copyText.classList.remove("active");
+        }, 2500);
     });
 </script>
 </html>

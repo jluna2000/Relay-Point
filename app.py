@@ -202,7 +202,8 @@ def imagestorageupload():
 
 @app.route("/download_from_imagestorage_client/<filename>", methods=["GET"])
 def imagestoragedownload(filename):
-    return send_from_directory(f'{session['my_dirs']['photosToDriveArcs']}', filename)
+    room_data = request.form['room']
+    return send_from_directory(f'sfolder_{room_data}/photosToDriveArcs', filename)
 
 @app.route("/upload_thumbnails_from_imagestorage_client", methods=["POST"])
 def thumbnailstorageupload():

@@ -11,8 +11,13 @@
 </head>
 <body>
     <nav>
-        <a href="{{ url_for('upload') }}">Upload</a>
-        <a href="#about">About</a>
+        <div class="nav-left">
+            <a href="{{ url_for('upload') }}">Upload</a>
+            <a href="#about">About</a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
     </nav>
     {% if authenticated %}
         <div class="gallery">
@@ -34,6 +39,9 @@
                 </div>
             </a>
         </div>
+        <script>
+            document.getElementsByClassName("nav-right")[0].classList.add("invisi");
+        </script>
     {% endif %}
 </body>
 </html>

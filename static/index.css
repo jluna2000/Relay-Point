@@ -48,6 +48,8 @@ html{
 nav {
     background-color: #333;
     overflow: hidden;
+    display: flex;
+    justify-content: space-between;
 }
 
 /* Links inside the nav bar */
@@ -58,6 +60,14 @@ nav a {
     text-align: center;
     padding: 14px 16px;
     text-decoration: none;
+}
+.nav-left,
+.nav-right {
+  display: flex;
+  gap: 10px;
+  &.invisi{
+    display: none;
+  }
 }
 
 /* Change link color on hover */
