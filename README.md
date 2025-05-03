@@ -1,4 +1,4 @@
-# NASAtHome
+# Relay Point
 This project aims to create a relay server from a machine with a source drive to any given client machine. This is to provide a remote access alternative to using/making a NAS and opening router to the public.
 
 ## To run the server
