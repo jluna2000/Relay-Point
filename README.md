@@ -30,3 +30,6 @@ python app.py
 # to leave the python virtual environment/deactivate it
 deactivate
 ```
+
+## How it looks...
+![quickdemo](https://github.com/user-attachments/assets/1d3daa93-4632-429b-aa63-4c790e4e2819)
